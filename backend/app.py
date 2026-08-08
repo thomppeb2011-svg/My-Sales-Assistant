@@ -966,6 +966,24 @@ def clear_history():
     return jsonify({"ok": True})
 
 
+@app.route("/api/admin/delete-test-account", methods=["POST"])
+def delete_test_account():
+    """TEMPORARY, one-time use — deletes a single hardcoded leftover test
+    account by exact email match. No general-purpose delete capability.
+    Remove this route entirely once used."""
+    target_email = "domain-launch-verify-20260808@example.com"
+
+    db = get_db()
+    row = db.execute("SELECT id FROM users WHERE email = ?", (target_email,)).fetchone()
+    if row is None:
+        return jsonify({"error": "Account not found."}), 404
+
+    db.execute("DELETE FROM graded_calls WHERE user_id = ?", (row["id"],))
+    db.execute("DELETE FROM users WHERE id = ?", (row["id"],))
+    db.commit()
+    return jsonify({"deleted_email": target_email})
+
+
 
 # Runs on import, not just under `python3 app.py` — a production WSGI
 # server (gunicorn) imports this module and never hits the __main__ guard
