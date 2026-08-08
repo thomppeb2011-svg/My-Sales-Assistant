@@ -588,7 +588,11 @@ def create_checkout_session():
     try:
         session = stripe.checkout.Session.create(
             mode="payment",
-            payment_method_types=["card"],
+            # Managed Payments (Stripe's newer default) requires a tax code
+            # per product for automatic tax calculation, which doesn't apply
+            # to simple digital token sales — opt out and handle payment
+            # methods/tax the classic way instead.
+            managed_payments={"enabled": False},
             line_items=[{
                 "price_data": {
                     "currency": "usd",
