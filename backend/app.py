@@ -96,7 +96,7 @@ PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "https://my-sales-assistant-
 if STRIPE_SECRET_KEY:
     stripe.api_key = STRIPE_SECRET_KEY
 
-# --- Anthropic (your key, used for every user's grading call) ---
+# --- Anthropic (your key, used for every user's grading request) ---
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 ANTHROPIC_MODEL = "claude-sonnet-5"
 
@@ -750,19 +750,21 @@ PRIVACY_POLICY_HTML = """
 <h1>Privacy Policy — My Sales Assistant</h1>
 <p class="updated">Last updated: August 2026</p>
 
-<p>My Sales Assistant ("we," "our," "the extension") is a Chrome extension that grades sales
-call transcripts using AI. This policy explains what data we collect, why, and how it's handled.</p>
+<p>My Sales Assistant ("we," "our," "the software") is available as a Chrome extension and a
+website that grade sales transcripts using AI. This policy explains what data we collect, why,
+and how it's handled.</p>
 
 <h2>What we collect</h2>
 <ul>
   <li><strong>Account information:</strong> your email address and password. Passwords are
   hashed (bcrypt) before storage — we never store or have access to your plaintext password.</li>
   <li><strong>Token balance:</strong> how many credits your account has, tied to your purchases.</li>
-  <li><strong>Call transcripts:</strong> when you submit a transcript to be graded, it is sent to
-  our server and then to Anthropic's Claude API to generate a grade. We do not store transcripts
-  or grading results on our servers after the request completes — the grading history you see in
-  the extension is stored locally in your own browser (via Chrome's local storage), not on our
-  servers, and is never transmitted anywhere except at the moment you request a grade.</li>
+  <li><strong>Sales transcripts:</strong> when you submit a transcript to be graded, it is sent to
+  our server and then to Anthropic's Claude API to generate a grade. We do not store the transcript
+  text itself on our servers after the request completes. The grading result is saved as your
+  history, tied to your account — on the website, that history lives on our servers; on the Chrome
+  extension, it's stored locally in your own browser. Either way, transcript content is never
+  transmitted anywhere except at the moment you request a grade.</li>
   <li><strong>Payment information:</strong> handled entirely by Stripe. We never see or store your
   card number or other payment details — Stripe processes the charge and tells us only whether it
   succeeded, so we can credit your account.</li>
@@ -770,18 +772,19 @@ call transcripts using AI. This policy explains what data we collect, why, and h
 
 <h2>Third parties we share data with</h2>
 <ul>
-  <li><strong>Anthropic</strong> (maker of Claude) — receives the transcript text and call context
+  <li><strong>Anthropic</strong> (maker of Claude) — receives the transcript text and sale context
   you submit, solely to generate your grading result.</li>
   <li><strong>Stripe</strong> — receives your payment details directly (never through us) to
   process purchases.</li>
 </ul>
 <p>We do not sell your data, and we do not share it with anyone else.</p>
 
-<h2>Your responsibility regarding call transcripts</h2>
+<h2>Your responsibility regarding sales transcripts</h2>
 <p>If a transcript you submit includes another person's voice or statements (e.g., a sales
-prospect), you are responsible for ensuring you have the legal right to record, retain, and
-submit that conversation for analysis, including complying with any applicable call-recording
-consent laws in your jurisdiction. Only submit transcripts you're authorized to share.</p>
+prospect or customer), you are responsible for ensuring you have the legal right to record,
+retain, and submit that interaction for analysis, including complying with any applicable
+recording/consent laws in your jurisdiction — whether the interaction happened over the phone,
+on video, or in person. Only submit transcripts you're authorized to share.</p>
 
 <h2>Data retention and deletion</h2>
 <p>Your account (email, hashed password, and token balance) is retained until you ask us to
