@@ -962,25 +962,6 @@ def clear_history():
     return jsonify({"ok": True})
 
 
-@app.route("/api/admin/set-founder-balance", methods=["POST"])
-def set_founder_balance():
-    """TEMPORARY, one-time use — sets the founder's own account to a fixed
-    perk balance. Hardcoded to one specific email, no general-purpose
-    balance-setting capability. Remove this route entirely once used."""
-    target_email = "thomppeb2011@gmail.com"
-    target_balance_usd = 1000.00  # 100,000 tokens at $0.01/token
-
-    db = get_db()
-    db.execute(
-        "UPDATE users SET credit_balance_usd = ? WHERE email = ?",
-        (target_balance_usd, target_email),
-    )
-    db.commit()
-    row = db.execute("SELECT credit_balance_usd FROM users WHERE email = ?", (target_email,)).fetchone()
-    if row is None:
-        return jsonify({"error": "Account not found."}), 404
-    return jsonify({"email": target_email, "credit_balance_tokens": usd_to_tokens(row["credit_balance_usd"])})
-
 
 # Runs on import, not just under `python3 app.py` — a production WSGI
 # server (gunicorn) imports this module and never hits the __main__ guard
