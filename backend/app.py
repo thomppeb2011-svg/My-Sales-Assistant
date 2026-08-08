@@ -93,6 +93,10 @@ STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 # public URL, since the extension has no normal web page of its own to
 # return to. Defaults to your Render URL; override for other hosts.
 PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "https://my-sales-assistant-backend.onrender.com")
+
+# Used to authenticate the standing admin credit-grant endpoint below.
+# Never logged, never returned in any response.
+ADMIN_SECRET = os.environ.get("ADMIN_SECRET", "")
 if STRIPE_SECRET_KEY:
     stripe.api_key = STRIPE_SECRET_KEY
 
@@ -607,6 +611,43 @@ def purchase_credits():
 
     row = grant_plan_credit(user["id"], plan)
     return jsonify({"user": user_public_view(user["id"], user["email"], row["credit_balance_usd"])})
+
+
+@app.route("/api/admin/grant-credits", methods=["POST"])
+@limiter.limit("20 per hour")
+def admin_grant_credits():
+    """Standing admin endpoint for manually comping tokens to an account
+    (e.g. free-trial grants during outreach). Requires the ADMIN_SECRET
+    header to match the server's env var — returns 404 (not 401/403) on
+    any auth failure so the route's existence isn't revealed."""
+    provided = request.headers.get("X-Admin-Secret", "")
+    if not ADMIN_SECRET or not hmac.compare_digest(provided, ADMIN_SECRET):
+        return jsonify({"error": "Not found."}), 404
+
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip().lower()
+    tokens = data.get("tokens")
+    if not email or not isinstance(tokens, (int, float)) or tokens <= 0:
+        return jsonify({"error": "email and a positive tokens amount are required"}), 400
+
+    db = get_db()
+    row = db.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
+    if row is None:
+        return jsonify({"error": "Account not found."}), 404
+
+    db.execute(
+        "UPDATE users SET credit_balance_usd = credit_balance_usd + ? WHERE id = ?",
+        (tokens * USD_PER_TOKEN, row["id"]),
+    )
+    db.commit()
+    new_balance = db.execute(
+        "SELECT credit_balance_usd FROM users WHERE id = ?", (row["id"],)
+    ).fetchone()["credit_balance_usd"]
+    return jsonify({
+        "email": email,
+        "granted_tokens": tokens,
+        "new_balance_tokens": usd_to_tokens(new_balance),
+    })
 
 
 @app.route("/api/checkout/create-session", methods=["POST"])
