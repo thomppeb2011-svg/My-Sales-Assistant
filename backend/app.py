@@ -756,29 +756,6 @@ def grade():
     })
 
 
-@app.route("/api/admin/cleanup-test-accounts", methods=["POST"])
-def cleanup_test_accounts():
-    """TEMPORARY, one-time use — deletes a hardcoded list of accounts
-    created while testing the Stripe integration. Remove this route
-    entirely once used; it has no auth check and shouldn't linger."""
-    test_emails = [
-        "render-live-test@example.com",
-        "stripe-verify-test@example.com",
-        "stripe-verify-test-2@example.com",
-        "stripe-verify-test-3@example.com",
-        "stripe-live-verify@example.com",
-        "live-webhook-verify@example.com",
-    ]
-    db = get_db()
-    deleted = []
-    for email in test_emails:
-        cur = db.execute("DELETE FROM users WHERE email = ?", (email,))
-        if cur.rowcount:
-            deleted.append(email)
-    db.commit()
-    return jsonify({"deleted": deleted})
-
-
 # Runs on import, not just under `python3 app.py` — a production WSGI
 # server (gunicorn) imports this module and never hits the __main__ guard
 # below, so init_db() has to live out here or the users table never gets
