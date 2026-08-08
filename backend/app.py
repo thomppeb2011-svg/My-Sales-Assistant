@@ -748,7 +748,7 @@ HTTPS. Session tokens are signed and expire automatically.</p>
 means you accept the updated policy.</p>
 
 <h2>Contact</h2>
-<p>Questions or deletion requests: <a href="mailto:thomppeb2011@gmail.com">thomppeb2011@gmail.com</a></p>
+<p>Questions or deletion requests: <a href="mailto:mysalesassistantai@gmail.com">mysalesassistantai@gmail.com</a></p>
 
 </body>
 </html>
