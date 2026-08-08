@@ -681,6 +681,85 @@ def checkout_cancel():
     )
 
 
+PRIVACY_POLICY_HTML = """
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Privacy Policy — My Sales Assistant</title>
+<style>
+  body { font-family: -apple-system, sans-serif; max-width: 720px; margin: 40px auto; padding: 0 20px; line-height: 1.6; color: #1a1a1a; }
+  h1 { font-size: 24px; } h2 { font-size: 18px; margin-top: 32px; }
+  .updated { color: #666; font-size: 13px; margin-bottom: 32px; }
+</style>
+</head>
+<body>
+<h1>Privacy Policy — My Sales Assistant</h1>
+<p class="updated">Last updated: August 2026</p>
+
+<p>My Sales Assistant ("we," "our," "the extension") is a Chrome extension that grades sales
+call transcripts using AI. This policy explains what data we collect, why, and how it's handled.</p>
+
+<h2>What we collect</h2>
+<ul>
+  <li><strong>Account information:</strong> your email address and password. Passwords are
+  hashed (bcrypt) before storage — we never store or have access to your plaintext password.</li>
+  <li><strong>Token balance:</strong> how many credits your account has, tied to your purchases.</li>
+  <li><strong>Call transcripts:</strong> when you submit a transcript to be graded, it is sent to
+  our server and then to Anthropic's Claude API to generate a grade. We do not store transcripts
+  or grading results on our servers after the request completes — the grading history you see in
+  the extension is stored locally in your own browser (via Chrome's local storage), not on our
+  servers, and is never transmitted anywhere except at the moment you request a grade.</li>
+  <li><strong>Payment information:</strong> handled entirely by Stripe. We never see or store your
+  card number or other payment details — Stripe processes the charge and tells us only whether it
+  succeeded, so we can credit your account.</li>
+</ul>
+
+<h2>Third parties we share data with</h2>
+<ul>
+  <li><strong>Anthropic</strong> (maker of Claude) — receives the transcript text and call context
+  you submit, solely to generate your grading result.</li>
+  <li><strong>Stripe</strong> — receives your payment details directly (never through us) to
+  process purchases.</li>
+</ul>
+<p>We do not sell your data, and we do not share it with anyone else.</p>
+
+<h2>Your responsibility regarding call transcripts</h2>
+<p>If a transcript you submit includes another person's voice or statements (e.g., a sales
+prospect), you are responsible for ensuring you have the legal right to record, retain, and
+submit that conversation for analysis, including complying with any applicable call-recording
+consent laws in your jurisdiction. Only submit transcripts you're authorized to share.</p>
+
+<h2>Data retention and deletion</h2>
+<p>Your account (email, hashed password, and token balance) is retained until you ask us to
+delete it. To request deletion of your account and associated data, email us at the address
+below. Local grading history lives in your own browser and can be cleared at any time using the
+"Clear" option in the extension's History section, or by removing the extension.</p>
+
+<h2>Security</h2>
+<p>Passwords are hashed with bcrypt. All communication between the extension and our server uses
+HTTPS. Session tokens are signed and expire automatically.</p>
+
+<h2>Children's privacy</h2>
+<p>This product is not directed at children and is not intended for use by anyone under 18.</p>
+
+<h2>Changes to this policy</h2>
+<p>We may update this policy from time to time. Continued use of the extension after changes
+means you accept the updated policy.</p>
+
+<h2>Contact</h2>
+<p>Questions or deletion requests: <a href="mailto:thomppeb2011@gmail.com">thomppeb2011@gmail.com</a></p>
+
+</body>
+</html>
+"""
+
+
+@app.route("/privacy", methods=["GET"])
+def privacy_policy():
+    return Response(PRIVACY_POLICY_HTML, mimetype="text/html")
+
+
 @app.route("/api/grade", methods=["POST"])
 @limiter.limit("30 per hour")
 def grade():
