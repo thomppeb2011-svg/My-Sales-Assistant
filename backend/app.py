@@ -362,6 +362,7 @@ def web_app():
 
 
 @app.route("/api/health", methods=["GET"])
+@limiter.exempt
 def health():
     return jsonify({"status": "ok"})
 
