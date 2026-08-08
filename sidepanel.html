@@ -1,0 +1,171 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>My Sales Assistant</title>
+    <link rel="stylesheet" href="sidepanel.css" />
+  </head>
+  <body>
+    <section id="authView" class="auth-view hidden">
+      <div class="auth-card">
+        <img src="icons/icon128.png" alt="" class="auth-logo" />
+        <h1 class="auth-title">My Sales Assistant</h1>
+        <p class="auth-tagline">AI powered extension that fully grades and reviews your sales work</p>
+        <p class="auth-no-retainer">No retainer fee required</p>
+
+        <form id="authForm" autocomplete="on">
+          <div class="auth-tabs">
+            <button id="tabSignIn" type="button" class="auth-tab active">Sign In</button>
+            <button id="tabSignUp" type="button" class="auth-tab">Sign Up</button>
+          </div>
+          <label class="field-label" for="authEmail">Email</label>
+          <input type="email" id="authEmail" name="username" class="context-input" placeholder="you@example.com" autocomplete="username" required />
+          <label class="field-label" for="authPassword">Password</label>
+          <input type="password" id="authPassword" name="password" class="context-input" placeholder="••••••••" autocomplete="current-password" required />
+          <label class="remember-me-label">
+            <input type="checkbox" id="rememberMeCheckbox" checked />
+            Remember my email on this device
+          </label>
+          <button id="authSubmitBtn" type="submit">Sign In</button>
+        </form>
+        <button type="button" id="forgotPasswordLink" class="link-btn forgot-password-link">Forgot password?</button>
+        <div id="authError" class="error hidden"></div>
+
+        <div id="forgotPasswordView" class="hidden">
+          <div id="forgotStepRequest">
+            <label class="field-label" for="forgotEmail">Email</label>
+            <input type="email" id="forgotEmail" class="context-input" placeholder="you@example.com" />
+            <button id="sendResetCodeBtn" type="button">Send Reset Code</button>
+          </div>
+
+          <div id="forgotStepReset" class="hidden">
+            <p class="acct-panel-subtitle">Enter the code sent to your email, plus a new password.</p>
+            <label class="field-label" for="resetCodeInput">Reset Code</label>
+            <input type="text" id="resetCodeInput" class="context-input" placeholder="123456" inputmode="numeric" />
+            <label class="field-label" for="resetNewPassword">New Password</label>
+            <input type="password" id="resetNewPassword" class="context-input" placeholder="••••••••" />
+            <button id="submitResetBtn" type="button">Reset Password</button>
+          </div>
+
+          <button type="button" id="backToSignInLink" class="link-btn forgot-password-link">← Back to sign in</button>
+          <div id="forgotError" class="error hidden"></div>
+          <div id="forgotSuccess" class="success hidden"></div>
+        </div>
+      </div>
+    </section>
+
+    <header id="appHeader" class="hidden">
+      <h1>My Sales Assistant</h1>
+      <div class="header-actions">
+        <div class="header-account">
+          <span id="userEmailLabel" class="user-email"></span>
+          <span id="creditBalanceLabel" class="credit-balance"></span>
+          <button type="button" id="buyTokensBtn" class="buy-tokens-link">Buy tokens</button>
+        </div>
+        <button id="settingsBtn" title="Account" aria-label="Account">⚙</button>
+      </div>
+    </header>
+
+    <div id="keyBanner" class="banner hidden">
+      Out of credits. <a href="#" id="openSettingsLink">Buy more under Account → Buy Tokens</a>.
+    </div>
+
+    <main id="appMain" class="hidden">
+      <section id="inputView">
+        <label class="field-label" for="callContext">Sale Context</label>
+        <input
+          type="text"
+          id="callContext"
+          class="context-input"
+          placeholder="Ex: Cold calling for B2B AI, Closing for a Day Trading offer, etc."
+        />
+        <div id="dropZone" class="drop-zone">
+          <textarea
+            id="transcriptInput"
+            placeholder="Paste the call transcript here, or drag a transcript file (.txt, .md, .srt, .vtt) in…"
+          ></textarea>
+          <div id="dropOverlay" class="drop-overlay hidden">Drop transcript file to load it</div>
+        </div>
+        <input type="file" id="fileInput" accept=".txt,.md,.srt,.vtt,text/plain" class="hidden" />
+        <div class="row">
+          <button id="gradeBtn">Grade Sale</button>
+          <button id="attachBtn" class="secondary" title="Attach a transcript file">Attach File</button>
+          <button id="clearBtn" class="secondary">Clear</button>
+        </div>
+        <div id="errorBox" class="error hidden"></div>
+      </section>
+
+      <section id="loadingView" class="hidden">
+        <div class="spinner"></div>
+        <p>Grading call…</p>
+      </section>
+
+      <section id="resultView" class="hidden">
+        <div class="row">
+          <button id="backBtn" class="secondary">← New Grade</button>
+        </div>
+        <div id="resultOutput"></div>
+      </section>
+
+      <section id="accountView" class="hidden">
+        <div class="row">
+          <button id="acctBackBtn" class="secondary">← Back</button>
+        </div>
+
+        <div id="acctMenu" class="acct-menu">
+          <button type="button" class="acct-menu-item" data-target="changeEmail">Change Email</button>
+          <button type="button" class="acct-menu-item" data-target="changePassword">Change Password</button>
+          <button type="button" class="acct-menu-item" data-target="upgrade">Buy Tokens</button>
+          <button type="button" class="acct-menu-item" data-target="billing">Billing</button>
+          <div class="acct-menu-divider"></div>
+          <button type="button" id="acctSignOutBtn" class="acct-menu-item danger">Sign Out</button>
+        </div>
+
+        <div id="acctPanelChangeEmail" class="acct-panel hidden">
+          <h2 class="acct-panel-title">Change Email</h2>
+          <label class="field-label" for="newEmailInput">New Email</label>
+          <input type="email" id="newEmailInput" class="context-input" placeholder="new@example.com" />
+          <label class="field-label" for="newEmailPassword">Current Password</label>
+          <input type="password" id="newEmailPassword" class="context-input" placeholder="••••••••" />
+          <button id="submitEmailChangeBtn">Save Email</button>
+          <div id="acctEmailError" class="error hidden"></div>
+          <div id="acctEmailSuccess" class="success hidden"></div>
+        </div>
+
+        <div id="acctPanelChangePassword" class="acct-panel hidden">
+          <h2 class="acct-panel-title">Change Password</h2>
+          <label class="field-label" for="currentPasswordInput">Current Password</label>
+          <input type="password" id="currentPasswordInput" class="context-input" placeholder="••••••••" />
+          <label class="field-label" for="newPasswordInput">New Password</label>
+          <input type="password" id="newPasswordInput" class="context-input" placeholder="••••••••" />
+          <button id="submitPasswordChangeBtn">Save Password</button>
+          <div id="acctPasswordError" class="error hidden"></div>
+          <div id="acctPasswordSuccess" class="success hidden"></div>
+        </div>
+
+        <div id="acctPanelUpgrade" class="acct-panel hidden">
+          <h2 class="acct-panel-title">Buy Tokens</h2>
+          <p class="acct-panel-subtitle">Credits never expire and only spend when you grade a call.</p>
+          <div id="planList" class="plan-list"></div>
+          <div id="acctPlansError" class="error hidden"></div>
+        </div>
+
+        <div id="acctPanelBilling" class="acct-panel hidden">
+          <h2 class="acct-panel-title">Billing</h2>
+          <p class="empty-note">Billing management is coming soon.</p>
+        </div>
+      </section>
+
+      <section id="historySection">
+        <div class="history-header">
+          <h2>History</h2>
+          <button id="clearHistoryBtn" class="link-btn">Clear</button>
+        </div>
+        <ul id="historyList"></ul>
+      </section>
+    </main>
+
+    <script src="config.js"></script>
+    <script src="sidepanel.js"></script>
+  </body>
+</html>

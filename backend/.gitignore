@@ -1,0 +1,6 @@
+data.db
+backups/
+secret.key
+.env
+__pycache__/
+*.pyc
