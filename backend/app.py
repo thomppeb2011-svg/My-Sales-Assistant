@@ -623,7 +623,11 @@ def stripe_webhook():
     sig_header = request.headers.get("Stripe-Signature", "")
 
     try:
-        event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
+        # .to_dict() up front — stripe's StripeObject looks dict-like but
+        # its .get() doesn't behave like a plain dict's (it raises instead
+        # of returning None for a missing/shadowed key), which breaks the
+        # safe-access patterns below if left as a StripeObject.
+        event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET).to_dict()
     except (ValueError, stripe.error.SignatureVerificationError):
         return jsonify({"error": "Invalid signature."}), 400
 
