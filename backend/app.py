@@ -12,7 +12,7 @@ import bcrypt
 import jwt
 import requests
 import stripe
-from flask import Flask, request, jsonify, g, Response
+from flask import Flask, request, jsonify, g, Response, render_template
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -148,6 +148,24 @@ def estimate_cost(input_tokens, output_tokens):
     return (input_tokens / 1_000_000) * INPUT_COST_PER_MTOK + (output_tokens / 1_000_000) * OUTPUT_COST_PER_MTOK
 
 
+GRADE_LABEL_RE = re.compile(r"Grade[:\s\-]*\**\s*([A-F][+-]?)", re.IGNORECASE)
+
+
+def extract_grade_label(text):
+    match = GRADE_LABEL_RE.search(text)
+    return f"Grade {match.group(1)}" if match else ""
+
+
+def history_entry_view(row):
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "output": row["output"],
+        "grade": row["grade_label"] or "",
+        "created_at": row["created_at"],
+    }
+
+
 def usd_to_tokens(usd):
     return round(usd / USD_PER_TOKEN)
 
@@ -276,6 +294,18 @@ def init_db():
         )
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS graded_calls (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            output TEXT NOT NULL,
+            grade_label TEXT,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
     conn.commit()
     conn.close()
 
@@ -319,6 +349,16 @@ def user_public_view(user_id, email, credit_balance_usd):
     # The real USD balance never leaves the server — only its token
     # translation does, per the fixed USD_PER_TOKEN rate.
     return {"id": user_id, "email": email, "credit_balance_tokens": usd_to_tokens(credit_balance_usd)}
+
+
+@app.route("/", methods=["GET"])
+def landing():
+    return render_template("landing.html")
+
+
+@app.route("/app", methods=["GET"])
+def web_app():
+    return render_template("app.html")
 
 
 @app.route("/api/health", methods=["GET"])
@@ -659,12 +699,23 @@ def stripe_webhook():
     return jsonify({"ok": True})
 
 
+CHECKOUT_PAGE_STYLE = (
+    "font-family: -apple-system, sans-serif; text-align: center; padding: 60px 20px;"
+)
+CHECKOUT_BUTTON_STYLE = (
+    "display: inline-block; margin-top: 20px; padding: 10px 20px; background: #1a1a1a; "
+    "color: #fff; text-decoration: none; border-radius: 7px; font-weight: 600;"
+)
+
+
 @app.route("/checkout/success", methods=["GET"])
 def checkout_success():
     return Response(
-        "<html><body style='font-family: sans-serif; text-align: center; padding: 60px;'>"
+        f"<html><body style='{CHECKOUT_PAGE_STYLE}'>"
         "<h2>Payment successful</h2>"
-        "<p>Your tokens have been added. You can close this tab and return to the extension.</p>"
+        "<p>Your tokens have been added. If you came from the browser extension, you can close "
+        "this tab. Otherwise, continue below.</p>"
+        f"<a href='/app' style='{CHECKOUT_BUTTON_STYLE}'>Continue to My Sales Assistant</a>"
         "</body></html>",
         mimetype="text/html",
     )
@@ -673,9 +724,11 @@ def checkout_success():
 @app.route("/checkout/cancel", methods=["GET"])
 def checkout_cancel():
     return Response(
-        "<html><body style='font-family: sans-serif; text-align: center; padding: 60px;'>"
+        f"<html><body style='{CHECKOUT_PAGE_STYLE}'>"
         "<h2>Checkout cancelled</h2>"
-        "<p>No charge was made. You can close this tab and return to the extension.</p>"
+        "<p>No charge was made. If you came from the browser extension, you can close this tab. "
+        "Otherwise, continue below.</p>"
+        f"<a href='/app' style='{CHECKOUT_BUTTON_STYLE}'>Back to My Sales Assistant</a>"
         "</body></html>",
         mimetype="text/html",
     )
@@ -829,10 +882,84 @@ def grade():
     db.commit()
     row = db.execute("SELECT credit_balance_usd FROM users WHERE id = ?", (user["id"],)).fetchone()
 
+    grade_label = extract_grade_label(output_text)
+    preview_name = (call_context or transcript)[:80].strip().replace("\n", " ") or "Graded call"
+    cursor = db.execute(
+        "INSERT INTO graded_calls (user_id, name, output, grade_label, created_at) VALUES (?, ?, ?, ?, ?)",
+        (user["id"], preview_name, output_text, grade_label, datetime.now(timezone.utc).isoformat()),
+    )
+    db.commit()
+    history_row = db.execute("SELECT * FROM graded_calls WHERE id = ?", (cursor.lastrowid,)).fetchone()
+
     return jsonify({
         "output": output_text,
         "user": user_public_view(user["id"], user["email"], row["credit_balance_usd"]),
+        "history_entry": history_entry_view(history_row),
     })
+
+
+@app.route("/api/history", methods=["GET"])
+def list_history():
+    user, error = get_authenticated_user()
+    if error:
+        message, status = error
+        return jsonify({"error": message}), status
+
+    db = get_db()
+    rows = db.execute(
+        "SELECT * FROM graded_calls WHERE user_id = ? ORDER BY id DESC LIMIT 100", (user["id"],)
+    ).fetchall()
+    return jsonify({"history": [history_entry_view(r) for r in rows]})
+
+
+@app.route("/api/history/<int:entry_id>", methods=["PATCH"])
+def rename_history_entry(entry_id):
+    user, error = get_authenticated_user()
+    if error:
+        message, status = error
+        return jsonify({"error": message}), status
+
+    data = request.get_json(silent=True) or {}
+    new_name = (data.get("name") or "").strip()
+    if not new_name:
+        return jsonify({"error": "Name can't be empty."}), 400
+
+    db = get_db()
+    db.execute(
+        "UPDATE graded_calls SET name = ? WHERE id = ? AND user_id = ?",
+        (new_name, entry_id, user["id"]),
+    )
+    db.commit()
+    row = db.execute("SELECT * FROM graded_calls WHERE id = ? AND user_id = ?", (entry_id, user["id"])).fetchone()
+    if row is None:
+        return jsonify({"error": "Not found."}), 404
+    return jsonify({"entry": history_entry_view(row)})
+
+
+@app.route("/api/history/<int:entry_id>", methods=["DELETE"])
+def delete_history_entry(entry_id):
+    user, error = get_authenticated_user()
+    if error:
+        message, status = error
+        return jsonify({"error": message}), status
+
+    db = get_db()
+    db.execute("DELETE FROM graded_calls WHERE id = ? AND user_id = ?", (entry_id, user["id"]))
+    db.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/history", methods=["DELETE"])
+def clear_history():
+    user, error = get_authenticated_user()
+    if error:
+        message, status = error
+        return jsonify({"error": message}), status
+
+    db = get_db()
+    db.execute("DELETE FROM graded_calls WHERE user_id = ?", (user["id"],))
+    db.commit()
+    return jsonify({"ok": True})
 
 
 # Runs on import, not just under `python3 app.py` — a production WSGI
