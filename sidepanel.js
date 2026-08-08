@@ -798,24 +798,20 @@ async function purchasePlan(planId, buyBtn) {
   const { token } = await getStoredAuth();
   buyBtn.disabled = true;
   const originalLabel = buyBtn.textContent;
-  buyBtn.textContent = "Purchasing…";
+  buyBtn.textContent = "Redirecting…";
 
   try {
-    const response = await fetch(`${BACKEND_URL}/api/credits/purchase`, {
+    const response = await fetch(`${BACKEND_URL}/api/checkout/create-session`, {
       method: "POST",
       headers: { "content-type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({ plan_id: planId }),
     });
     const data = await response.json();
-    if (!response.ok) throw new Error(data.error || "Purchase failed.");
+    if (!response.ok) throw new Error(data.error || "Couldn't start checkout.");
 
-    await setStoredAuth(token, data.user);
-    updateCreditUI(data.user);
-    buyBtn.textContent = "Added!";
-    setTimeout(() => {
-      buyBtn.textContent = originalLabel;
-      buyBtn.disabled = false;
-    }, 1500);
+    chrome.tabs.create({ url: data.url });
+    buyBtn.textContent = originalLabel;
+    buyBtn.disabled = false;
   } catch (err) {
     els.acctPlansError.textContent =
       err.message === "Failed to fetch" ? "Can't reach the server. Is the backend running?" : err.message;
@@ -824,6 +820,24 @@ async function purchasePlan(planId, buyBtn) {
     buyBtn.disabled = false;
   }
 }
+
+// Refresh the balance whenever the side panel regains focus — payment
+// happens in a separate tab, so this is how the new balance shows up
+// without the user needing to manually reload after checking out.
+document.addEventListener("visibilitychange", async () => {
+  if (document.visibilityState !== "visible") return;
+  const { token, user } = await getStoredAuth();
+  if (!token || !user) return;
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/me`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!response.ok) return;
+    const data = await response.json();
+    if (data.token) await setStoredAuth(data.token, data.user);
+    if (data.user) updateCreditUI(data.user);
+  } catch (_err) {
+    // silent — this is a background convenience refresh, not user-initiated
+  }
+});
 
 els.submitEmailChangeBtn.addEventListener("click", async () => {
   const newEmail = els.newEmailInput.value.trim();

@@ -1,1 +1,1 @@
-const BACKEND_URL = "http://127.0.0.1:8787";
+const BACKEND_URL = "https://my-sales-assistant-backend.onrender.com";

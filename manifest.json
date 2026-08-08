@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "description": "Paste a sales transcript in the sidebar and get brutally honest, structured grading and review against your sales process.",
   "permissions": ["sidePanel", "storage"],
-  "host_permissions": ["http://127.0.0.1:8787/*"],
+  "host_permissions": ["https://my-sales-assistant-backend.onrender.com/*", "http://127.0.0.1:8787/*"],
   "action": {
     "default_title": "My Sales Assistant",
     "default_icon": {

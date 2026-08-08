@@ -11,7 +11,8 @@ from email.message import EmailMessage
 import bcrypt
 import jwt
 import requests
-from flask import Flask, request, jsonify, g
+import stripe
+from flask import Flask, request, jsonify, g, Response
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -84,6 +85,16 @@ def send_reset_email(to_email, code):
         if DEV_MODE:
             print(f"[password reset] code for {to_email}: {code}", flush=True)
 
+
+# --- Stripe ---
+STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
+STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+# Base URL Checkout redirects back to after payment — your own backend's
+# public URL, since the extension has no normal web page of its own to
+# return to. Defaults to your Render URL; override for other hosts.
+PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "https://my-sales-assistant-backend.onrender.com")
+if STRIPE_SECRET_KEY:
+    stripe.api_key = STRIPE_SECRET_KEY
 
 # --- Anthropic (your key, used for every user's grading call) ---
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
@@ -254,6 +265,14 @@ def init_db():
             credit_balance_usd REAL NOT NULL DEFAULT 0,
             reset_code_hash TEXT,
             reset_code_expires_at TEXT
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS processed_stripe_events (
+            event_id TEXT PRIMARY KEY,
+            processed_at TEXT NOT NULL
         )
         """
     )
@@ -510,16 +529,51 @@ def list_plans():
     return jsonify({"plans": [plan_public_view(p) for p in PLANS.values()]})
 
 
+def grant_plan_credit(user_id, plan):
+    """Single source of truth for actually adding tokens to a balance.
+    Only ever called after Stripe confirms a real payment (webhook), or
+    from the dev-only endpoint below while DEV_MODE is on."""
+    usable_credit = plan_usable_credit_usd(plan)
+    db = get_db()
+    db.execute(
+        "UPDATE users SET credit_balance_usd = credit_balance_usd + ? WHERE id = ?",
+        (usable_credit, user_id),
+    )
+    db.commit()
+    return db.execute("SELECT credit_balance_usd FROM users WHERE id = ?", (user_id,)).fetchone()
+
+
 @app.route("/api/credits/purchase", methods=["POST"])
 @limiter.limit("20 per hour")
 def purchase_credits():
-    """TEMPORARY / DEV-ONLY: grants credits directly with no real payment.
-    This exists so the credits system can be built and tested before Stripe
-    Checkout is wired up. It MUST be replaced by a Stripe webhook handler
-    (that calls this same crediting logic only after Stripe confirms a
-    successful charge) before this ever goes live — as written, anyone
-    signed in can grant themselves free credits by calling this endpoint.
+    """DEV-ONLY: grants credits directly with no real payment. Disabled
+    whenever DEV_MODE is off (it's off in production/render.yaml) so this
+    can never be used to get free tokens on the live site — real purchases
+    go through /api/checkout/create-session + the Stripe webhook instead.
     """
+    if not DEV_MODE:
+        return jsonify({"error": "Not available."}), 403
+
+    user, error = get_authenticated_user()
+    if error:
+        message, status = error
+        return jsonify({"error": message}), status
+
+    data = request.get_json(silent=True) or {}
+    plan = PLANS.get(data.get("plan_id"))
+    if not plan:
+        return jsonify({"error": "Unknown plan."}), 400
+
+    row = grant_plan_credit(user["id"], plan)
+    return jsonify({"user": user_public_view(user["id"], user["email"], row["credit_balance_usd"])})
+
+
+@app.route("/api/checkout/create-session", methods=["POST"])
+@limiter.limit("20 per hour")
+def create_checkout_session():
+    if not STRIPE_SECRET_KEY:
+        return jsonify({"error": "Payments aren't configured on the server yet."}), 500
+
     user, error = get_authenticated_user()
     if error:
         message, status = error
@@ -531,19 +585,92 @@ def purchase_credits():
     if not plan:
         return jsonify({"error": "Unknown plan."}), 400
 
-    usable_credit = plan_usable_credit_usd(plan)
+    try:
+        session = stripe.checkout.Session.create(
+            mode="payment",
+            payment_method_types=["card"],
+            line_items=[{
+                "price_data": {
+                    "currency": "usd",
+                    "product_data": {
+                        "name": f"My Sales Assistant — {plan['label']} tokens",
+                    },
+                    "unit_amount": round(plan["price_usd"] * 100),
+                },
+                "quantity": 1,
+            }],
+            client_reference_id=str(user["id"]),
+            metadata={"plan_id": plan_id, "user_id": str(user["id"])},
+            success_url=f"{PUBLIC_BASE_URL}/checkout/success",
+            cancel_url=f"{PUBLIC_BASE_URL}/checkout/cancel",
+        )
+    except stripe.error.StripeError as e:
+        return jsonify({"error": f"Stripe error: {e.user_message or str(e)}"}), 502
+
+    return jsonify({"url": session.url})
+
+
+@app.route("/api/stripe/webhook", methods=["POST"])
+def stripe_webhook():
+    if not STRIPE_WEBHOOK_SECRET:
+        return jsonify({"error": "Webhook not configured."}), 500
+
+    payload = request.get_data()
+    sig_header = request.headers.get("Stripe-Signature", "")
+
+    try:
+        event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
+    except (ValueError, stripe.error.SignatureVerificationError):
+        return jsonify({"error": "Invalid signature."}), 400
 
     db = get_db()
+
+    # Idempotency: Stripe can and does redeliver the same event more than
+    # once — without this, a retry would credit the same purchase twice.
+    already_processed = db.execute(
+        "SELECT 1 FROM processed_stripe_events WHERE event_id = ?", (event["id"],)
+    ).fetchone()
+    if already_processed:
+        return jsonify({"ok": True, "duplicate": True})
+
+    if event["type"] == "checkout.session.completed":
+        session = event["data"]["object"]
+        user_id = session.get("client_reference_id")
+        plan_id = (session.get("metadata") or {}).get("plan_id")
+        plan = PLANS.get(plan_id)
+
+        if user_id and plan:
+            grant_plan_credit(int(user_id), plan)
+
     db.execute(
-        "UPDATE users SET credit_balance_usd = credit_balance_usd + ? WHERE id = ?",
-        (usable_credit, user["id"]),
+        "INSERT INTO processed_stripe_events (event_id, processed_at) VALUES (?, ?)",
+        (event["id"], datetime.now(timezone.utc).isoformat()),
     )
     db.commit()
-    row = db.execute("SELECT credit_balance_usd FROM users WHERE id = ?", (user["id"],)).fetchone()
 
-    return jsonify({
-        "user": user_public_view(user["id"], user["email"], row["credit_balance_usd"]),
-    })
+    return jsonify({"ok": True})
+
+
+@app.route("/checkout/success", methods=["GET"])
+def checkout_success():
+    return Response(
+        "<html><body style='font-family: sans-serif; text-align: center; padding: 60px;'>"
+        "<h2>Payment successful</h2>"
+        "<p>Your tokens have been added. You can close this tab and return to the extension.</p>"
+        "</body></html>",
+        mimetype="text/html",
+    )
+
+
+@app.route("/checkout/cancel", methods=["GET"])
+def checkout_cancel():
+    return Response(
+        "<html><body style='font-family: sans-serif; text-align: center; padding: 60px;'>"
+        "<h2>Checkout cancelled</h2>"
+        "<p>No charge was made. You can close this tab and return to the extension.</p>"
+        "</body></html>",
+        mimetype="text/html",
+    )
 
 
 @app.route("/api/grade", methods=["POST"])
