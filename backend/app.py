@@ -858,6 +858,68 @@ def privacy_policy():
     return Response(PRIVACY_POLICY_HTML, mimetype="text/html")
 
 
+TERMS_OF_SERVICE_HTML = """
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Terms of Service — My Sales Assistant</title>
+<style>
+  body { font-family: -apple-system, sans-serif; max-width: 720px; margin: 40px auto; padding: 0 20px; line-height: 1.6; color: #1a1a1a; }
+  h1 { font-size: 24px; }
+  .updated { color: #666; font-size: 13px; margin-bottom: 32px; }
+</style>
+</head>
+<body>
+<h1>Terms of Service — My Sales Assistant</h1>
+<p class="updated">Last updated: August 2026</p>
+
+<p>By using My Sales Assistant (the website and Chrome extension), you agree to these terms.
+The service is provided as-is, tokens are prepaid and non-refundable except where required by
+law, and you're responsible for having the rights to any sales transcript you submit for
+grading (see the Privacy Policy for more on that).</p>
+
+<p>Questions about these terms, refunds, or anything else: email us at
+<a href="mailto:mysalesassistantai@gmail.com">mysalesassistantai@gmail.com</a> and we'll get
+back to you.</p>
+
+</body>
+</html>
+"""
+
+
+@app.route("/terms", methods=["GET"])
+def terms_of_service():
+    return Response(TERMS_OF_SERVICE_HTML, mimetype="text/html")
+
+
+CUSTOMER_SUPPORT_HTML = """
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Customer Support — My Sales Assistant</title>
+<style>
+  body { font-family: -apple-system, sans-serif; max-width: 720px; margin: 40px auto; padding: 0 20px; line-height: 1.6; color: #1a1a1a; }
+  h1 { font-size: 24px; }
+</style>
+</head>
+<body>
+<h1>Customer Support</h1>
+<p>Questions, issues, or feedback about My Sales Assistant? Email us directly at
+<a href="mailto:mysalesassistantai@gmail.com">mysalesassistantai@gmail.com</a> and we'll get
+back to you as soon as we can.</p>
+
+</body>
+</html>
+"""
+
+
+@app.route("/support", methods=["GET"])
+def customer_support():
+    return Response(CUSTOMER_SUPPORT_HTML, mimetype="text/html")
+
+
 @app.route("/api/grade", methods=["POST"])
 @limiter.limit("30 per hour")
 def grade():
