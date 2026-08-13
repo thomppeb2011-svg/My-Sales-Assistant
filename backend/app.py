@@ -12,7 +12,7 @@ import bcrypt
 import jwt
 import requests
 import stripe
-from flask import Flask, request, jsonify, g, Response, render_template, send_file
+from flask import Flask, request, jsonify, g, Response, render_template
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -648,19 +648,6 @@ def admin_grant_credits():
         "granted_tokens": tokens,
         "new_balance_tokens": usd_to_tokens(new_balance),
     })
-
-
-@app.route("/api/admin/export-db", methods=["GET"])
-@limiter.limit("5 per hour")
-def admin_export_db():
-    """TEMPORARY: raw sqlite file download for a one-off backup before
-    tearing down the Render service. Remove this route in the very next
-    deploy after use — same rule as every other admin endpoint here."""
-    provided = request.headers.get("X-Admin-Secret", "")
-    if not ADMIN_SECRET or not hmac.compare_digest(provided, ADMIN_SECRET):
-        return jsonify({"error": "Not found."}), 404
-    get_db().commit()
-    return send_file(DB_PATH, as_attachment=True, download_name="data.db")
 
 
 @app.route("/api/checkout/create-session", methods=["POST"])
